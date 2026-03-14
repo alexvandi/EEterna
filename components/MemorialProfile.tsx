@@ -2,23 +2,24 @@
 
 import { useState } from "react";
 import { Profile } from "@/lib/db";
-import ProfileTabs from "./ProfileTabs";
 import { ArrowLeft, QrCode } from "lucide-react";
 import Link from "next/link";
 
 interface MemorialProfileProps {
   profile: Profile;
+  hasAccess: boolean;
+  children?: React.ReactNode;
 }
 
-export default function MemorialProfile({ profile }: MemorialProfileProps) {
+export default function MemorialProfile({ profile, hasAccess, children }: MemorialProfileProps) {
   const [showQr, setShowQr] = useState(false);
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return '—';
     const date = new Date(dateStr);
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  // Default floral background if none set
   const bgImage = profile.background_image_url || 'https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=1080&q=80';
   const profileImg = profile.profile_image_url || 'https://images.unsplash.com/photo-1544377193-33dcf4d68fb5?w=400&q=80';
 
@@ -26,7 +27,7 @@ export default function MemorialProfile({ profile }: MemorialProfileProps) {
     <div className="min-h-screen bg-background flex flex-col items-center animate-fade-in">
       <div className="w-full max-w-lg min-h-screen relative">
 
-        {/* Hero Section with background image */}
+        {/* Hero Section */}
         <div className="relative w-full">
           <div
             className="w-full h-72 md:h-80 relative"
@@ -36,8 +37,7 @@ export default function MemorialProfile({ profile }: MemorialProfileProps) {
               backgroundPosition: 'center',
             }}
           >
-            {/* Gradient overlays */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-[hsl(210,20%,70%)]/90" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-[hsl(220,14%,96%)]/95" />
 
             {/* Top navigation */}
             <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
@@ -53,7 +53,7 @@ export default function MemorialProfile({ profile }: MemorialProfileProps) {
             </div>
           </div>
 
-          {/* Profile image - centered, overlapping the background */}
+          {/* Profile image */}
           <div className="flex justify-center -mt-20 relative z-10">
             <div className="profile-ring">
               <div className="w-36 h-36 md:w-40 md:h-40 rounded-full overflow-hidden bg-muted">
@@ -68,17 +68,28 @@ export default function MemorialProfile({ profile }: MemorialProfileProps) {
         </div>
 
         {/* Name & Dates */}
-        <div className="text-center px-6 mt-4 mb-6">
+        <div className="text-center px-6 mt-4 mb-2">
           <h1 className="text-2xl md:text-3xl font-serif font-semibold text-foreground tracking-wide uppercase">
             {profile.first_name} {profile.last_name}
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5 tracking-wider">
-            NATO: {formatDate(profile.birth_date)} — DECESSO: {formatDate(profile.death_date)}
+            {formatDate(profile.birth_date)} — {formatDate(profile.death_date)}
           </p>
         </div>
 
-        {/* Tabs */}
-        <ProfileTabs profile={profile} />
+        {/* Epitaph (always visible) */}
+        {profile.epitaph && (
+          <div className="px-4 mt-4 mb-4">
+            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-white/60">
+              <p className="text-foreground leading-relaxed font-serif text-base text-center font-light italic whitespace-pre-wrap">
+                &ldquo;{profile.epitaph}&rdquo;
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Children (access request button or tabs) */}
+        {children}
 
         {/* QR Code Modal */}
         {showQr && (
@@ -94,8 +105,8 @@ export default function MemorialProfile({ profile }: MemorialProfileProps) {
               <div className="bg-muted/30 p-6 rounded-xl mb-4 flex items-center justify-center">
                 <QrCode size={120} className="text-foreground/80" />
               </div>
-              <p className="text-xs text-muted-foreground">
-                ID: {profile.qr_id}
+              <p className="text-xs text-muted-foreground font-mono">
+                {profile.qr_id}
               </p>
             </div>
           </div>

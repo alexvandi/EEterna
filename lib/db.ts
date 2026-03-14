@@ -54,6 +54,25 @@ export type ProfileAccess = {
   created_at: string;
 };
 
+export type AccessRequest = {
+  id: string;
+  profile_id: string;
+  requester_name: string;
+  requester_email: string;
+  status: 'pending' | 'approved' | 'denied';
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QrCode = {
+  id: string;
+  code: string;
+  is_registered: boolean;
+  profile_id: string | null;
+  created_at: string;
+};
+
 // ============================================
 // PROFILES
 // ============================================
@@ -88,6 +107,13 @@ export async function createProfile(profile: {
     console.error('Error creating profile:', error);
     return null;
   }
+
+  // Mark the QR code as registered
+  await supabase
+    .from('qr_codes')
+    .update({ is_registered: true, profile_id: data.id })
+    .eq('code', profile.qr_id);
+
   return data;
 }
 
@@ -103,6 +129,28 @@ export async function updateProfile(id: string, updates: Partial<Profile>): Prom
     return null;
   }
   return data;
+}
+
+// ============================================
+// QR CODES
+// ============================================
+export async function getQrCode(code: string): Promise<QrCode | null> {
+  const { data, error } = await supabase
+    .from('qr_codes')
+    .select('*')
+    .eq('code', code)
+    .single();
+  if (error) return null;
+  return data;
+}
+
+export async function getAllQrCodes(): Promise<QrCode[]> {
+  const { data, error } = await supabase
+    .from('qr_codes')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return data || [];
 }
 
 // ============================================
@@ -174,7 +222,6 @@ export async function addMessage(message: {
 // LIKES
 // ============================================
 export async function toggleMediaLike(mediaId: string, visitorName: string): Promise<boolean> {
-  // Check if already liked
   const { data: existing } = await supabase
     .from('media_likes')
     .select('id')
@@ -184,10 +231,10 @@ export async function toggleMediaLike(mediaId: string, visitorName: string): Pro
 
   if (existing) {
     await supabase.from('media_likes').delete().eq('id', existing.id);
-    return false; // unliked
+    return false;
   } else {
     await supabase.from('media_likes').insert([{ media_id: mediaId, visitor_name: visitorName }]);
-    return true; // liked
+    return true;
   }
 }
 
@@ -268,6 +315,108 @@ export async function checkUserAccess(profileId: string, email: string): Promise
 }
 
 // ============================================
+// ACCESS REQUESTS (notifications)
+// ============================================
+export async function createAccessRequest(request: {
+  profile_id: string;
+  requester_name: string;
+  requester_email: string;
+  message?: string;
+}): Promise<AccessRequest | null> {
+  // Check if already requested
+  const { data: existing } = await supabase
+    .from('access_requests')
+    .select('*')
+    .eq('profile_id', request.profile_id)
+    .eq('requester_email', request.requester_email)
+    .eq('status', 'pending')
+    .single();
+
+  if (existing) return existing; // Already pending
+
+  const { data, error } = await supabase
+    .from('access_requests')
+    .insert([request])
+    .select()
+    .single();
+  if (error) {
+    console.error('Error creating access request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAccessRequestsForProfile(profileId: string): Promise<AccessRequest[]> {
+  const { data, error } = await supabase
+    .from('access_requests')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function getPendingRequestsCount(profileId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('access_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('profile_id', profileId)
+    .eq('status', 'pending');
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function approveAccessRequest(requestId: string): Promise<boolean> {
+  // Get the request
+  const { data: request } = await supabase
+    .from('access_requests')
+    .select('*')
+    .eq('id', requestId)
+    .single();
+
+  if (!request) return false;
+
+  // Update status
+  const { error: updateError } = await supabase
+    .from('access_requests')
+    .update({ status: 'approved', updated_at: new Date().toISOString() })
+    .eq('id', requestId);
+
+  if (updateError) return false;
+
+  // Grant viewer access
+  await addProfileAccess({
+    profile_id: request.profile_id,
+    user_email: request.requester_email,
+    role: 'viewer',
+    granted_by: 'owner',
+  });
+
+  return true;
+}
+
+export async function denyAccessRequest(requestId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('access_requests')
+    .update({ status: 'denied', updated_at: new Date().toISOString() })
+    .eq('id', requestId);
+  return !error;
+}
+
+export async function checkExistingRequest(profileId: string, email: string): Promise<AccessRequest | null> {
+  const { data, error } = await supabase
+    .from('access_requests')
+    .select('*')
+    .eq('profile_id', profileId)
+    .eq('requester_email', email)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  if (error) return null;
+  return data;
+}
+
+// ============================================
 // STORAGE (file upload)
 // ============================================
 export async function uploadMediaFile(file: File, profileId: string): Promise<string | null> {
@@ -301,4 +450,14 @@ export function getVisitorName(): string | null {
 export function setVisitorName(name: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('eterna_visitor', name);
+}
+
+export function getVisitorEmail(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('eterna_visitor_email');
+}
+
+export function setVisitorEmail(email: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('eterna_visitor_email', email);
 }
