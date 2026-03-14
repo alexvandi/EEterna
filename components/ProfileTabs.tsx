@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Profile, Media, Message, getMediaForProfile, getMessagesForProfile, addMessage, addMedia, uploadMediaFile, toggleMediaLike, toggleMessageLike, getVisitorEmail, checkUserAccess } from "@/lib/db";
 import VisitorIdentification from "./VisitorIdentification";
-import { Heart, Image as ImageIcon, MessageCircle, BookOpen, Send, Upload, X, Play, Plus, Lock, Globe } from "lucide-react";
+import { Heart, Image as ImageIcon, MessageCircle, BookOpen, Send, Upload, X, Play, Plus, Lock, Globe, Loader2 } from "lucide-react";
 
 interface ProfileTabsProps {
   profile: Profile;
